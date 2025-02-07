@@ -46,13 +46,61 @@ WHERE
 select diststyle, sortkey1 from svv_table_info
 WHERE "schema" = 'public' AND "table" = 'sales';
 
+------------------------------------------------------------------
+diststyle                sortkey1
+KEY(listid)	             dateid
+-------------------------------------------------------------------
+
+    
 explain
 select sellerid, qtysold, pricepaid
  from sales s
  join users u on u.userid = s.sellerid
  where u.city='Omaha';
 
+--below output shows that the cost associated with this is 5526231, now we will make some changes and will see this cost again
+
+/*
+XN Hash Join DS_BCAST_INNER (cost=624.99..5526231.45 rows=164 width=22)
+Hash Cond: ("outer".sellerid = "inner".userid)
+-> XN Seq Scan on sales s (cost=0.00..1724.56 rows=172456 width=22)
+-> XN Hash (cost=624.88..624.88 rows=46 width=4)
+-> XN Seq Scan on users u (cost=0.00..624.88 rows=46 width=4)
+Filter: ((city)::text = 'Omaha'::text)
+*/
+
+
+
 Alter table sales alter distkey sellerid;
+
+select diststyle, sortkey1 from svv_table_info
+WHERE "schema" = 'public' AND "table" = 'sales';
+
+------------------------------------------------------------------
+diststyle                sortkey1
+KEY(sellerid)	         dateid
+-------------------------------------------------------------------
+
+explain
+select sellerid, qtysold, pricepaid
+ from sales s
+ join users u on u.userid = s.sellerid
+ where u.city='Omaha';
+
+--see the cost now which is 6K only
+
+/*
+XN Hash Join DS_DIST_NONE (cost=624.99..6231.45 rows=164 width=22)
+Hash Cond: ("outer".sellerid = "inner".userid)
+-> XN Seq Scan on sales s (cost=0.00..1724.56 rows=172456 width=22)
+-> XN Hash (cost=624.88..624.88 rows=46 width=4)
+-> XN Seq Scan on users u (cost=0.00..624.88 rows=46 width=4)
+Filter: ((city)::text = 'Omaha'::text)
+*/
+
+--#################### so in above, performance increased from 5526231 to 6231 ######################################
+
+-- Now create a similar table and use even distribution style and see the cost associated with the similar query
 
 create table sales_even
 diststyle even
@@ -69,10 +117,20 @@ select sellerid, qtysold, pricepaid
  join users u on u.userid = s.sellerid
  where u.city='Omaha'
 
+/*XN Hash Join DS_BCAST_INNER (cost=624.99..5526231.45 rows=164 width=22)
+Hash Cond: ("outer".sellerid = "inner".userid)
+-> XN Seq Scan on sales_even s (cost=0.00..1724.56 rows=172456 width=22)
+-> XN Hash (cost=624.88..624.88 rows=46 width=4)
+-> XN Seq Scan on users u (cost=0.00..624.88 rows=46 width=4)
+Filter: ((city)::text = 'Omaha'::text)*/
+    
 --###################Improve Query Performance with Sortkey#####################################################
 
 explain
 select * from sales where pricepaid < 1000;
+
+/*XN Seq Scan on sales (cost=0.00..2155.70 rows=144921 width=64)
+Filter: (pricepaid < 1000.00)*/
 
 create table sales_qty 
 sortkey (pricepaid)
@@ -82,8 +140,11 @@ select * from sales;
 explain
 select * from sales_qty where pricepaid < 1000;
 
+/*
+XN Seq Scan on sales_qty (cost=0.00..1821.13 rows=145691 width=64)
+Filter: (pricepaid < 1000.00)
+*/
 
-
-
+--########################## so in above, performance increased from 2155 to 1821######################################
 
 
