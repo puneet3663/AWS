@@ -147,4 +147,10 @@ Filter: (pricepaid < 1000.00)
 
 --########################## so in above, performance increased from 2155 to 1821######################################
 
+--practically when I run below 2 queries, I found that 1st query took 40 second and 2nd query took 22 seconds
+
+select * from sales where pricepaid < 1000
+
+select * from sales_qty where pricepaid < 1000
+
 
